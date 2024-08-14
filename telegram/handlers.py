@@ -84,21 +84,26 @@ async def process_birthdate(message: types.Message, state: FSMContext, db):
 
     try:
         birth_date = datetime.strptime(text, '%Y-%m-%d').date()
-        age = (datetime.now().date() - birth_date).days // 365
+        today = datetime.now().date()
+
+        # Проверка на дату рождения в будущем
+        if birth_date > today:
+            await message.answer("⚠️ Дата рождения не может быть в будущем. Пожалуйста, введите корректную дату.")
+            return
+
+        # Проверка на возраст больше 100 лет
+        age = (today - birth_date).days // 365
         if age > 100:
             await message.answer("⚠️ Возраст пациента не может быть больше 100 лет. Попробуйте снова.")
             return
 
-        await state.update_data(birth_date=birth_date, visit_date=datetime.now().date())
+        await state.update_data(birth_date=birth_date, visit_date=today)
         data = await state.get_data()
-        user_id = message.from_user.id  # Получаем идентификатор пользователя
-
-        # Логирование успешного добавления пациента
-        await add_patient_to_db(user_id, data['full_name'], data['birth_date'], data['visit_date'], db)
-
         await message.answer(
             f"✅ Пациент успешно добавлен!\n\n👤 ФИО: {data['full_name']}\n🎂 Дата рождения: {data['birth_date']}"
         )
+        # Передача всех необходимых аргументов в add_patient_to_db
+        await add_patient_to_db(data['full_name'], birth_date, today, db)
         await state.clear()
         await send_main_menu(message)
     except ValueError:
@@ -110,16 +115,13 @@ async def process_birthdate(message: types.Message, state: FSMContext, db):
         if attempts >= 3:
             return
 
-async def add_patient_to_db(user_id: int,
-                             full_name: str,
-                             birth_date: datetime.date,
-                             visit_date: datetime.date,
-                             db):
+
+async def add_patient_to_db(full_name: str, birth_date: datetime.date, visit_date: datetime.date, db):
     try:
         await db.add_patient(full_name, birth_date, visit_date)
-        logger.info(f"Пользователь {user_id} добавил пациента: {full_name}, Дата рождения: {birth_date}")
+        logger.info(f"Пациент добавлен: {full_name}, Дата рождения: {birth_date}")
     except Exception as e:
-        logger.error(f"Ошибка при добавлении пациента {full_name} пользователем {user_id} в базу данных: {e}")
+        logger.error(f"Ошибка при добавлении пациента {full_name} в базу данных: {e}")
 
 
 async def process_confirmation(message: types.Message, state: FSMContext):
