@@ -18,7 +18,7 @@ class Patient(Base):
     full_name = Column(String, nullable=False)
     birth_date = Column(Date, nullable=False)
     visit_date = Column(Date, nullable=False)
-
+    user_id = Column(Integer, nullable=False)
 
 class Database:
     def __init__(self, db_url=f'sqlite+aiosqlite:///{db_path}'):
@@ -40,30 +40,33 @@ class Database:
     async def add_patient(self,
                           full_name: str,
                           birth_date: datetime,
-                          visit_date: datetime):
+                          visit_date: datetime,
+                          user_id: int):
         async with self.SessionLocal() as session:
             async with session.begin():
                 patient = Patient(full_name=full_name,
                                   birth_date=birth_date,
-                                  visit_date=visit_date)
+                                  visit_date=visit_date,
+                                  user_id=user_id)
                 session.add(patient)
 
-    async def get_today_patients(self):
+    async def get_today_patients(self, user_id: int):
         today = datetime.now().date()
         async with self.SessionLocal() as session:
             result = await session.execute(
                 select(Patient.full_name, Patient.birth_date)
                 .where(func.date(Patient.visit_date) == today)
+                .where(Patient.user_id == user_id)
             )
             patients = result.fetchall()
         return patients
 
-    async def get_weekly_stats(self):
+    async def get_weekly_stats(self, user_id: int):
         async with AsyncSession(self.engine) as session:
-            result = await session.execute(text("""
+            result = await session.execute(text(f"""
                 SELECT strftime('%w', visit_date) AS day, COUNT(*) AS count
                 FROM patients
-                WHERE visit_date >= date('now', '-7 days')
+                WHERE visit_date >= date('now', '-7 days') AND user_id = {user_id}
                 GROUP BY day
                 ORDER BY day
             """))

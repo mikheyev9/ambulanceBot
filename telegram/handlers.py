@@ -71,6 +71,7 @@ async def process_name(message: types.Message, state: FSMContext):
 
 async def process_birthdate(message: types.Message, state: FSMContext, db):
     text = message.text.strip()
+    user_id = message.from_user.id
 
     if not text:
         attempts = await handle_attempts(
@@ -86,24 +87,21 @@ async def process_birthdate(message: types.Message, state: FSMContext, db):
         birth_date = datetime.strptime(text, '%Y-%m-%d').date()
         today = datetime.now().date()
 
-        # Проверка на дату рождения в будущем
         if birth_date > today:
             await message.answer("⚠️ Дата рождения не может быть в будущем. Пожалуйста, введите корректную дату.")
             return
 
-        # Проверка на возраст больше 100 лет
         age = (today - birth_date).days // 365
         if age > 100:
             await message.answer("⚠️ Возраст пациента не может быть больше 100 лет. Попробуйте снова.")
             return
 
-        await state.update_data(birth_date=birth_date, visit_date=today)
+        await state.update_data(birth_date=birth_date, visit_date=today, user_id=user_id)
         data = await state.get_data()
         await message.answer(
             f"✅ Пациент успешно добавлен!\n\n👤 ФИО: {data['full_name']}\n🎂 Дата рождения: {data['birth_date']}"
         )
-        # Передача всех необходимых аргументов в add_patient_to_db
-        await add_patient_to_db(data['full_name'], birth_date, today, db)
+        await add_patient_to_db(data['full_name'], birth_date, today, user_id, db)
         await state.clear()
         await send_main_menu(message)
     except ValueError:
@@ -116,13 +114,13 @@ async def process_birthdate(message: types.Message, state: FSMContext, db):
             return
 
 
-async def add_patient_to_db(full_name: str, birth_date: datetime.date, visit_date: datetime.date, db):
+async def add_patient_to_db(full_name: str, birth_date: datetime.date,
+                            visit_date: datetime.date, user_id: int, db):
     try:
-        await db.add_patient(full_name, birth_date, visit_date)
+        await db.add_patient(full_name, birth_date, visit_date, user_id)
         logger.info(f"Пациент добавлен: {full_name}, Дата рождения: {birth_date}")
     except Exception as e:
         logger.error(f"Ошибка при добавлении пациента {full_name} в базу данных: {e}")
-
 
 async def process_confirmation(message: types.Message, state: FSMContext):
     await state.clear()
@@ -130,8 +128,9 @@ async def process_confirmation(message: types.Message, state: FSMContext):
 
 
 async def cmd_today_patients(message: types.Message, db):
-    logger.info(f"Пользователь {message.from_user.id} запросил список пациентов на сегодня.")
-    patients = await db.get_today_patients()
+    user_id = message.from_user.id
+    logger.info(f"Пользователь {user_id} запросил список пациентов на сегодня.")
+    patients = await db.get_today_patients(user_id)
     if patients:
         patient_list = "\n".join([f"👤 {name} (🎂 Дата рождения: {birth_date})" for name, birth_date in patients])
         await message.answer(f"📅 Пациенты, пришедшие сегодня:\n\n{patient_list}")
@@ -141,8 +140,9 @@ async def cmd_today_patients(message: types.Message, db):
 
 
 async def cmd_week_stats(message: types.Message, db):
-    logger.info(f"Пользователь {message.from_user.id} запросил статистику за неделю.")
-    stats = await db.get_weekly_stats()
+    user_id = message.from_user.id
+    logger.info(f"Пользователь {user_id} запросил статистику за неделю.")
+    stats = await db.get_weekly_stats(user_id)
     days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота']
     stats_message = "\n".join([f"📅 {days[int(day)]}: {count} пациентов" for day, count in stats])
     await message.answer(f"📊 Количество пациентов за последние 7 дней:\n\n{stats_message}")
