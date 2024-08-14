@@ -1,0 +1,26 @@
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+.env/
+
+# Logs
+logs/
+*.log
+
+# SQLite database
+patients.db
+
+# Poetry lock file (optional)
+poetry.lock
+
+# MyPy and other type checking artifacts
+.mypy_cache/
+
+# IDE and editor directories
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
